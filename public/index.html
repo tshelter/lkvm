@@ -63,7 +63,7 @@
     });
 
     document.addEventListener('keydown', (event) => {
-        socket.send(JSON.stringify({type: 'keydown', key: event.key}));
+        socket.send(JSON.stringify({type: 'keydown', key: event.keyCode}));
     });
 </script>
 </body>

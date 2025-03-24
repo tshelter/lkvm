@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/tshelter/lkvm/internal/dto"
+	"github.com/tshelter/lkvm/internal/hid/ch9329"
 )
 
 type WebsocketTransport struct {
@@ -47,6 +48,20 @@ func (t WebsocketTransport) WebSocketEventHandler(w http.ResponseWriter, r *http
 		}
 
 		log.Printf("Received event: %+v", event)
+		hid := ch9329.NewCh9329(0, 0)
+
+		if event.Type == "mousemove" {
+			err := hid.MoveTo(uint16(event.X), uint16(event.Y))
+			if err != nil {
+				log.Printf("Error moving mouse: %v", err)
+			}
+		}
+		if event.Type == "keydown" {
+			err := hid.KeyDown(byte(event.Key))
+			if err != nil {
+				log.Printf("Error pressing key: %v", err)
+			}
+		}
 	}
 }
 
