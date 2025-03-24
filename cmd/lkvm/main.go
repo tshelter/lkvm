@@ -58,7 +58,7 @@ func keyDownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func keyUpHandler(w http.ResponseWriter, r *http.Request) {
+func keyUpHandler(w http.ResponseWriter, _ *http.Request) {
 	if err := keyboard.Release(); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -94,7 +94,7 @@ func mouseDownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mouseUpHandler(w http.ResponseWriter, r *http.Request) {
+func mouseUpHandler(w http.ResponseWriter, _ *http.Request) {
 	if err := mouse.Release(); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
