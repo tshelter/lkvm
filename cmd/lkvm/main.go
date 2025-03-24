@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/tarm/serial"
@@ -74,9 +75,72 @@ func fileServerHandler(w http.ResponseWriter, r *http.Request) {
 	http.FileServer(http.Dir("./public")).ServeHTTP(w, r)
 }
 
+func mouseDownHandler(w http.ResponseWriter, r *http.Request) {
+	button := ch.MouseCtrl(r.URL.Query().Get("button"))
+
+	switch button {
+	case ch.CtrlLeft, ch.CtrlRight, ch.CtrlCenter, ch.CtrlNull:
+		if err := mouse.Press(button); err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+			log.Println(err)
+		}
+	default:
+		http.Error(w, `{"error":"invalid button value"}`, http.StatusBadRequest)
+	}
+}
+
+func mouseUpHandler(w http.ResponseWriter, r *http.Request) {
+	if err := mouse.Release(); err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Println(err)
+	}
+}
+
+func mouseMoveHandler(w http.ResponseWriter, r *http.Request) {
+	xStr := r.URL.Query().Get("x")
+	yStr := r.URL.Query().Get("y")
+
+	if xStr == "" || yStr == "" {
+		http.Error(w, `{"error":"x and y must be provided"}`, http.StatusBadRequest)
+		return
+	}
+
+	x, errX := strconv.Atoi(xStr)
+	y, errY := strconv.Atoi(yStr)
+
+	if errX != nil || errY != nil {
+		http.Error(w, `{"error":"x and y must be valid integers"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := mouse.Move(x, y, false, 1920, 1080); err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Println(err)
+	}
+}
+
 func main() {
 	http.HandleFunc("/api/keydown", keyDownHandler)
 	http.HandleFunc("/api/keyup", keyUpHandler)
+	http.HandleFunc("/api/mousedown", mouseDownHandler)
+	http.HandleFunc("/api/mouseup", mouseUpHandler)
+	http.HandleFunc("/api/mousemove", mouseMoveHandler)
 	http.HandleFunc("/", fileServerHandler)
 
 	fmt.Println("Starting server on :8080")
