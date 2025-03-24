@@ -27,14 +27,25 @@
 <video id="video" autoplay playsinline></video>
 <script>
     const video = document.getElementById('video');
-    const socket = new WebSocket(`ws://${window.location.host}/ws`);
 
     async function initializeCamera() {
         try {
-            video.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
+            const constraints = {
+                video: {
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    aspectRatio: { ideal: 16 / 9 },
+                    frameRate: { ideal: 30, max: 60 }
+                }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+
             video.addEventListener('loadedmetadata', () => {
                 video.width = video.videoWidth;
                 video.height = video.videoHeight;
+                console.log(`Camera resolution: ${video.videoWidth}x${video.videoHeight}`);
             });
         } catch (error) {
             console.error('Error accessing the camera:', error);
@@ -43,27 +54,89 @@
 
     initializeCamera();
 
+    video.addEventListener('click', (event) => {
+        const rect = video.getBoundingClientRect();
+        const scaleX = video.videoWidth / rect.width;
+        const scaleY = video.videoHeight / rect.height;
+
+        const realX = (event.clientX - rect.left) * scaleX;
+        const realY = (event.clientY - rect.top) * scaleY;
+
+        console.log(`Real coordinates: X=${realX.toFixed(2)}, Y=${realY.toFixed(2)}`);
+    });
+
     function getEventCoordinates(event) {
         const rect = video.getBoundingClientRect();
-        const realWidth = video.videoWidth;
-        const realHeight = video.videoHeight;
-        const x = Math.round((event.clientX - rect.left) * (realWidth / rect.width));
-        const y = Math.round((event.clientY - rect.top) * (realHeight / rect.height));
-        return {x, y};
+        const scaleX = video.videoWidth / rect.width;
+        const scaleY = video.videoHeight / rect.height;
+
+        const realX = (event.clientX - rect.left) * scaleX;
+        const realY = (event.clientY - rect.top) * scaleY;
+
+        return {x: Math.round(realX), y: Math.round(realY)};
     }
+
+    const sendEventData = (endpoint, params) => {
+        const queryString = new URLSearchParams(params).toString();
+        const url = `${window.location.protocol}//${window.location.host}/api/${endpoint}?${queryString}`;
+        fetch(url, {method: 'POST'});
+    };
 
     video.addEventListener('mousemove', (event) => {
         const {x, y} = getEventCoordinates(event);
-        socket.send(JSON.stringify({type: 'mousemove', x, y}));
+        sendEventData('mousemove', {x, y});
     });
 
     video.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+
         const {x, y} = getEventCoordinates(event);
-        socket.send(JSON.stringify({type: 'mousedown', x, y}));
+        const map = {0: 'left', 1: 'middle', 2: 'right'};
+        const button = map[event.button];
+        sendEventData('mousedown', {x, y, button});
+    });
+
+    video.addEventListener('mouseup', (event) => {
+        const {x, y} = getEventCoordinates(event);
+        const map = {0: 'left', 1: 'middle', 2: 'right'};
+        const button = map[event.button];
+        sendEventData('mouseup', {x, y, button});
     });
 
     document.addEventListener('keydown', (event) => {
-        socket.send(JSON.stringify({type: 'keydown', key: event.keyCode}));
+        event.preventDefault();
+
+        const key = event.key.length > 1? event.key.toLowerCase() : event.key;
+        sendEventData('keydown', {
+            key: key,
+            control: event.ctrlKey,
+            shift: event.shiftKey,
+            alt: event.altKey
+        });
+    });
+
+    document.addEventListener('keyup', (event) => {
+        const key = event.key.toLowerCase() ? event.key.toLowerCase() : event.key;
+        sendEventData('keyup', {
+            key: key,
+            control: event.ctrlKey,
+            shift: event.shiftKey,
+            alt: event.altKey
+        });
+    });
+
+    const eventsToDisable = [
+        { type: 'dblclick', element: document },
+        { type: 'wheel', element: document },
+        { type: 'contextmenu', element: document },
+        { type: 'beforeunload', element: window }
+    ];
+    const unifiedHandler = (event) => {
+        event.preventDefault();
+        if (event.type === 'beforeunload') return '';
+    };
+    eventsToDisable.forEach(({ type, element }) => {
+        element.addEventListener(type, unifiedHandler);
     });
 </script>
 </body>
