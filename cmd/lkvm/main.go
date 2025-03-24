@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tarm/serial"
 	ch "github.com/tshelter/ch9329"
 )
@@ -28,13 +27,13 @@ func init() {
 	mouse = ch.NewMouseSender(port)
 }
 
-func keyDown(c *gin.Context) {
-	key := c.Query("key")
-	control := c.Query("control") == "true"
-	shift := c.Query("shift") == "true"
-	alt := c.Query("alt") == "true"
+func keyDownHandler(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	control := r.URL.Query().Get("control") == "true"
+	shift := r.URL.Query().Get("shift") == "true"
+	alt := r.URL.Query().Get("alt") == "true"
 
-	modifiers := []string{}
+	var modifiers []string
 	if control {
 		modifiers = append(modifiers, "ctrl")
 	}
@@ -46,28 +45,42 @@ func keyDown(c *gin.Context) {
 	}
 
 	if err := keyboard.Press(key, modifiers); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	w.WriteHeader(http.StatusOK)
+
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Println(err)
+		return
+	}
 }
 
-func keyUp(c *gin.Context) {
+func keyUpHandler(w http.ResponseWriter, r *http.Request) {
 	if err := keyboard.Release(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Fatal(err)
+		return
+	}
+}
+
+func fileServerHandler(w http.ResponseWriter, r *http.Request) {
+	http.FileServer(http.Dir("./public")).ServeHTTP(w, r)
 }
 
 func main() {
-	r := gin.Default()
-	r.Static("/", "./public")
-	r.POST("api/keydown", keyDown)
-	r.POST("api/keyup", keyUp)
+	http.HandleFunc("/api/keydown", keyDownHandler)
+	http.HandleFunc("/api/keyup", keyUpHandler)
+	http.HandleFunc("/", fileServerHandler)
 
 	fmt.Println("Starting server on :8080")
-	if err := r.Run(":8080"); err != nil {
+	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
 	}
 }
